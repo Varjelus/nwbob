@@ -22,10 +22,10 @@ const (
 // Defaults
 const (
     DEFAULT_SRC = "."
-    DEFAULT_REL = "../release"
+    DEFAULT_REL = "nw-release"
     DEFAULT_ICO = "icon.ico"
 )
-var DEFAULT_TMP = filepath.Join(os.TempDir(), "bob.nw")
+var DEFAULT_TMP = os.TempDir()
 var DEFAULT_TOL = func() string {
     dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
     if err != nil {
@@ -51,11 +51,11 @@ var (
     helpFlag        = flag.Bool("help", false, "Show possible arguments and their default values and explanations.")
     platformsFlag   = flag.Bool("targets", false, "Show available target platforms.")
     versionFlag     = flag.Bool("version", false, "Show the versions and required versions of external tools.")
-    nwDir           = flag.String("nw", fmt.Sprintf("%s/nw", DEFAULT_TOL), "Set NW.js path.")
+    nwDir           = flag.String("nw", fmt.Sprintf("%s%cnw", DEFAULT_TOL, os.PathSeparator), "Set NW.js path.")
     deflate         = flag.Bool("cmp", false, "Should the ZIP be compressed.")
     srcDir          = flag.String("src", DEFAULT_SRC, "Source directory containing all your project files, including package.json.")
     outDir          = flag.String("out", DEFAULT_REL, "Output directory where you want the packaged application.")
-    icon            = flag.String("icon", fmt.Sprintf("%s/%s", DEFAULT_SRC, DEFAULT_ICO), "Desired application icon path.")
+    icon            = flag.String("icon", DEFAULT_ICO, "Desired application icon path.")
     target          = flag.String("target", "win64", "Target platform.")
     projectName     = flag.String("name", "app", "Application name.")
     tmp             = flag.String("tmp", DEFAULT_TMP, "Temporary files directory.")
@@ -122,14 +122,14 @@ func copyFile(src, dst string) error {
         }
     }
 
-    // Open source
+    // Open source file
     in, err := os.Open(src)
     if err != nil {
         return err
     }
     defer in.Close()
 
-    // Create destination
+    // Create destination file
     out, err := os.Create(dst)
     if err != nil {
         return err
@@ -150,6 +150,7 @@ func copyFile(src, dst string) error {
     return out.Sync()
 }
 
+// First argument is the final destination path, the rest are files to combine
 func copyPlus(dst string, srcs ...string) error {
     temp := filepath.Join(os.TempDir(), "bob.plus")
     together, err := os.OpenFile(temp, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
@@ -219,7 +220,7 @@ func createZip() {
     if err != nil {
         fatalError(err.Error())
     }
-    if err := archivist.Store(abs, *tmp); err != nil {
+    if err := archivist.Store(abs, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError(err.Error())
     }
 }
@@ -231,22 +232,31 @@ func createExe() {
     if err := copyFile(filepath.Join(*nwDir, "nw.exe"), exePath); err != nil {
         fatalError(err.Error())
     }
-    if err := copyPlus(exePath, exePath, *tmp); err != nil {
+    if err := copyPlus(exePath, exePath, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError("Can't copy app.nw+nw.exe: " + err.Error())
     }
 }
 
-func createIcon() {
+func createIcon() error {
+    if _, err := os.Stat(*icon); err != nil {
+        if os.IsNotExist(err) {
+            return fmt.Errorf("Can't find '%s'", *icon)
+        }
+        return fmt.Errorf("Can't read '%s': %s", *icon, err.Error())
+    }
+
     resourcer, err := exec.LookPath(fmt.Sprintf("%s/ar/Resourcer.exe", DEFAULT_TOL))
     if err != nil {
-        fatalError("Can't find the Anolis Resourcer executable: " + err.Error())
+        return fmt.Errorf("Can't find the Anolis Resourcer executable: %s", err.Error())
     }
     srcParam := fmt.Sprintf("-src:%s", exePath)
     icoParam := fmt.Sprintf("-file:%s", *icon)
     cmd := exec.Command(resourcer, "-op:upd", srcParam, "-type:14", "-name:IDR_MAINFRAME", icoParam)
     if err := cmd.Run(); err != nil {
-        fatalError("Can't embed the icon resource: " + err.Error())
+        return fmt.Errorf("Can't embed the icon resource: %s", err.Error())
     }
+
+    return nil
 }
 
 func main() {
@@ -270,8 +280,9 @@ func main() {
 
     // Embed the icon
     fmt.Print("Embedding icon... ")
-    createIcon()
-    green.Println("OK")
+    if err := createIcon(); err != nil {
+        yellow.Println(err.Error())
+    } else { green.Println("OK") }
 
     // Copy files
     fmt.Print("Copying NW.js files... ")
@@ -285,7 +296,7 @@ func main() {
     if err := os.Remove(filepath.Join(os.TempDir(), "bob.plus")); err != nil {
         fatalError(err.Error())
     }
-    if err := os.Remove(*tmp); err != nil {
+    if err := os.Remove(filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError(err.Error())
     }
     green.Println("OK")
