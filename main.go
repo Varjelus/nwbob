@@ -16,7 +16,7 @@ import (
 // Versions
 const (
     VERSION = "0.1.0"
-    NW_VERSION = "1.2.0"
+    NW_VERSION = "0.12.3"
     AR_VERSION = "0.9.0"
 )
 
@@ -26,14 +26,22 @@ const (
     DEFAULT_REL = "nw-release"
     DEFAULT_ICO = "icon.ico"
 )
-var DEFAULT_TMP = os.TempDir()
-var DEFAULT_TOL = func() string {
-    dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-    if err != nil {
-        fatalError(err.Error())
-    }
-    return filepath.Join(dir, "buildTools")
-}()
+var (
+    DEFAULT_NWF = func() string {
+        if _, err := os.Stat("nw"); os.IsNotExist(err) {
+            return "nw.zip"
+        }
+        return "nw" // Use unzipped version if possible
+    }()
+    DEFAULT_TMP = os.TempDir()
+    DEFAULT_TOL = func() string {
+        dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+        if err != nil {
+            fatalError(err.Error())
+        }
+        return filepath.Join(dir, "buildTools")
+    }()
+)
 
 // Colors
 var (
@@ -52,7 +60,7 @@ var (
     helpFlag        = flag.Bool("help", false, "Show possible arguments and their default values and explanations.")
     platformsFlag   = flag.Bool("targets", false, "Show available target platforms.")
     versionFlag     = flag.Bool("version", false, "Show the versions and required versions of external tools.")
-    nwDir           = flag.String("nw", fmt.Sprintf("%s%cnw", DEFAULT_TOL, os.PathSeparator), "Set NW.js path.")
+    nwDir           = flag.String("nw", fmt.Sprintf("%s%c%s", DEFAULT_TOL, os.PathSeparator, DEFAULT_NWF), "Set NW.js path.")
     deflate         = flag.Bool("cmp", false, "Should the ZIP be compressed.")
     srcDir          = flag.String("src", DEFAULT_SRC, "Source directory containing all your project files, including package.json.")
     outDir          = flag.String("out", DEFAULT_REL, "Output directory where you want the packaged application.")
@@ -92,6 +100,7 @@ func init() {
 }
 
 func fatalError(err string) {
+    cleanUp()
     fatalRed.Println(err)
     os.Exit(2)
 }
@@ -180,6 +189,7 @@ func copyPlus(dst string, srcs ...string) error {
     return copyFile(temp, dst)
 }
 
+// Copy NW.js files
 func copyWalk(path string, info os.FileInfo, err error) error {
     if err != nil { return err }
 
@@ -228,7 +238,7 @@ func copyWalk(path string, info os.FileInfo, err error) error {
 }
 
 func createZip() {
-    if err := archivist.Store(*srcDir, filepath.Join(*tmp, "bob.nw")); err != nil {
+    if err := archivist.Zip(*srcDir, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError(err.Error())
     }
 }
@@ -273,6 +283,15 @@ func createIcon() error {
     return nil
 }
 
+func cleanUp() {
+    temps := []string{"bobunzip", "bob.nw", "bob.plus"}
+    for _, temp := range temps {
+        if err := os.RemoveAll(filepath.Join(*tmp, temp)); err != nil {
+            yellow.Println(err.Error())
+        }
+    }
+}
+
 func main() {
     cyan.Println("nodebob-go\n---\n\n")
     fmt.Printf("NW.js files directory: %s\n", *nwDir)
@@ -287,16 +306,29 @@ func main() {
     createZip()
     green.Println("OK")
 
+    // Unzip NW.js files if necessary
+    if filepath.Ext(*nwDir) == ".zip" {
+        fmt.Print("Unpacking NW.js files... ")
+        if err := archivist.Unzip(*nwDir, filepath.Join(*tmp, "bobunzip")); err != nil {
+            fatalError(err.Error())
+        }
+        *nwDir = filepath.Join(*tmp, "bobunzip")
+
+        green.Println("OK")
+    }
+
     // Create the exe
     fmt.Print("Creating the executable... ")
     createExe()
     green.Println("OK")
 
-    // Embed the icon
-    /*fmt.Print("Embedding icon... ")
+    // Embed the icon FIXME
+    /*
+    fmt.Print("Embedding icon... ")
     if err := createIcon(); err != nil {
         yellow.Println(err.Error())
-    } else { green.Println("OK") }*/
+    } else { green.Println("OK") }
+    */
 
     // Copy files
     fmt.Print("Copying NW.js files... ")
@@ -307,12 +339,7 @@ func main() {
 
     // Delete temporary files
     fmt.Print("Deleting temporary files... ")
-    if err := os.Remove(filepath.Join(*tmp, "bob.plus")); err != nil {
-        fatalError(err.Error())
-    }
-    if err := os.Remove(filepath.Join(*tmp, "bob.nw")); err != nil {
-        fatalError(err.Error())
-    }
+    cleanUp()
     green.Println("OK")
 
     cyan.Println("Done!")
