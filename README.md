@@ -21,12 +21,15 @@ Quick start
 **Install**
 
 `git clone https://github.com/Varjelus/nodebob-go.git nodebob-go`
+
 `cd nodebob-go`
+
 `go build`
 
 **Run**
 
 `cd` to a directory containing NW.js `package.json`
+
 Execute `path/to/nodebob-go/nodebob-go.exe`
 
 License
