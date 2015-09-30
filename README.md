@@ -10,7 +10,7 @@ nodebob-go uses a number of open source projects to work properly:
 
 * ~~7-zip~~ [Replaced with my Go lib](https://github.com/Varjelus/archivist)
 * Anolis Resourcer - a windows resource editor, v0.9.0
-* NW.js - v1.2.0-win64
+* NW.js - v0.12.3-win64
 
 Version
 -
