@@ -256,6 +256,10 @@ func createExe() {
         fatalError(err.Error())
     }
 
+    if err := createIcon(); err != nil {
+        yellow.Println(err.Error())
+    }
+
     if err := copyPlus(exePath, exePath, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError("Can't copy app.nw+nw.exe: " + err.Error())
     }
@@ -269,7 +273,7 @@ func createIcon() error {
         return fmt.Errorf("Can't read '%s': %s", *icon, err.Error())
     }
 
-    resourcer, err := exec.LookPath(fmt.Sprintf("%s/ar/Resourcer.exe", DEFAULT_TOL))
+    resourcer, err := exec.LookPath(filepath.Join(DEFAULT_TOL, "ar", "Resourcer.exe"))
     if err != nil {
         return fmt.Errorf("Can't find the Anolis Resourcer executable: %s", err.Error())
     }
@@ -277,7 +281,7 @@ func createIcon() error {
     icoParam := fmt.Sprintf("-file:%s", *icon)
     cmd := exec.Command(resourcer, "-op:upd", srcParam, "-type:14", "-name:IDR_MAINFRAME", icoParam)
     if err := cmd.Run(); err != nil {
-        return fmt.Errorf("Can't embed the icon resource: %s", err.Error())
+        return fmt.Errorf("Can't embed icon: %s", err.Error())
     }
 
     return nil
@@ -321,14 +325,6 @@ func main() {
     fmt.Print("Creating the executable... ")
     createExe()
     green.Println("OK")
-
-    // Embed the icon FIXME
-    /*
-    fmt.Print("Embedding icon... ")
-    if err := createIcon(); err != nil {
-        yellow.Println(err.Error())
-    } else { green.Println("OK") }
-    */
 
     // Copy files
     fmt.Print("Copying NW.js files... ")
