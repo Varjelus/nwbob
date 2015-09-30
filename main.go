@@ -7,6 +7,7 @@ import (
     "path/filepath"
     "os"
     "os/exec"
+    "strings"
 
     "github.com/fatih/color"
     "github.com/Varjelus/archivist"
@@ -152,8 +153,8 @@ func copyFile(src, dst string) error {
 
 // First argument is the final destination path, the rest are files to combine
 func copyPlus(dst string, srcs ...string) error {
-    temp := filepath.Join(os.TempDir(), "bob.plus")
-    together, err := os.OpenFile(temp, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+    temp := filepath.Join(*tmp, "bob.plus")
+    together, err := os.OpenFile(temp, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
     if err != nil {
         return err
     }
@@ -182,6 +183,30 @@ func copyPlus(dst string, srcs ...string) error {
 func copyWalk(path string, info os.FileInfo, err error) error {
     if err != nil { return err }
 
+    fileName := strings.TrimPrefix(path, *nwDir)
+    if len(fileName) < 1 {
+        return nil
+    }
+    dstPath := filepath.Join(*outDir, fileName)
+
+    // Check if the destination file exists
+    dstInfo, err := os.Stat(dstPath)
+    // If it does exist and it errors, return
+    if err != nil && os.IsExist(err) {
+        return err
+    }
+    // If it does exist and it's the same file, return nil
+    if os.IsExist(err) && os.SameFile(info, dstInfo) {
+        return nil
+    }
+
+    if info.IsDir() {
+        if err := os.Mkdir(dstPath, info.Mode()); err != nil {
+            return err
+        }
+        return nil
+    }
+
     // Keep only regular, nonempty files
     if !info.Mode().IsRegular() || info.Size() == 0 {
         return nil
@@ -199,39 +224,28 @@ func copyWalk(path string, info os.FileInfo, err error) error {
         }
     }
 
-    dstPath := filepath.Join(*outDir, info.Name())
-
-    // Check if the destination file exists
-    dstInfo, err := os.Stat(dstPath)
-    // If it does and it errors, return
-    if err != nil && os.IsExist(err) {
-        return err
-    }
-    // If it DOES exist and has the same size, return nil
-    if os.IsExist(err) && os.SameFile(info, dstInfo) {
-        return nil
-    }
-
     return copyFile(path, dstPath)
 }
 
 func createZip() {
-    abs, err := filepath.Abs(*srcDir)
-    if err != nil {
-        fatalError(err.Error())
-    }
-    if err := archivist.Store(abs, filepath.Join(*tmp, "bob.nw")); err != nil {
+    if err := archivist.Store(*srcDir, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError(err.Error())
     }
 }
 
 func createExe() {
-    if err := os.MkdirAll(*outDir, 0666); err != nil {
+    if err := os.RemoveAll(*outDir); err != nil && os.IsExist(err) {
         fatalError(err.Error())
     }
+
+    if err := os.MkdirAll(*outDir, os.ModeDir); err != nil {
+        fatalError(err.Error())
+    }
+
     if err := copyFile(filepath.Join(*nwDir, "nw.exe"), exePath); err != nil {
         fatalError(err.Error())
     }
+
     if err := copyPlus(exePath, exePath, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError("Can't copy app.nw+nw.exe: " + err.Error())
     }
@@ -279,10 +293,10 @@ func main() {
     green.Println("OK")
 
     // Embed the icon
-    fmt.Print("Embedding icon... ")
+    /*fmt.Print("Embedding icon... ")
     if err := createIcon(); err != nil {
         yellow.Println(err.Error())
-    } else { green.Println("OK") }
+    } else { green.Println("OK") }*/
 
     // Copy files
     fmt.Print("Copying NW.js files... ")
@@ -293,7 +307,7 @@ func main() {
 
     // Delete temporary files
     fmt.Print("Deleting temporary files... ")
-    if err := os.Remove(filepath.Join(os.TempDir(), "bob.plus")); err != nil {
+    if err := os.Remove(filepath.Join(*tmp, "bob.plus")); err != nil {
         fatalError(err.Error())
     }
     if err := os.Remove(filepath.Join(*tmp, "bob.nw")); err != nil {
