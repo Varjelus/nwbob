@@ -238,6 +238,13 @@ func copyWalk(path string, info os.FileInfo, err error) error {
 }
 
 func createZip() {
+    // Make sure *srcDir/package.json exists
+    if _, err := os.Stat(filepath.Join(*srcDir, "package.json")); err != nil {
+        if os.IsNotExist(err) {
+            fatalError(fmt.Sprintf("%s/package.json not found", *srcDir))
+        }
+    }
+
     if err := archivist.Zip(*srcDir, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError(err.Error())
     }
