@@ -1,4 +1,4 @@
-nodebob-go
+nwbob
 ---
 
 nwbob is a go-gettable **build tool** for **NW.js** written in Golang. It's modeled after [nodebob](https://github.com/geo8bit/nodebob) ([my fork](https://github.com/Varjelus/nodebob))
@@ -8,8 +8,8 @@ Tech
 -
 nwbob uses a number of open source projects to work properly:
 
-* Anolis Resourcer - a windows resource editor, v0.9.0
-* NW.js - v0.12.3-win64
+* [Anolis Resourcer](http://anolis.codeplex.com/) - a windows resource editor, v0.9.0
+* [NW.js](http://nwjs.io/) - v0.12.3-win64
 
 
 Installation
@@ -33,6 +33,3 @@ Version
 License
 -
 MIT
-
-[node-webkit]: http://nwjs.io/
-[Anolis Resourcer]: http://anolis.codeplex.com/
