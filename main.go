@@ -10,6 +10,7 @@ import (
     "strings"
 
     "github.com/fatih/color"
+    "github.com/Varjelus/kopsa"
     "github.com/Varjelus/archivist"
 )
 
@@ -105,90 +106,6 @@ func fatalError(err string) {
     os.Exit(2)
 }
 
-func copyFile(src, dst string) error {
-    // Check first file
-    sfi, err := os.Stat(src)
-    if err != nil {
-        return err
-    }
-    if !sfi.Mode().IsRegular() {
-        // cannot copy non-regular files (e.g., directories,
-        // symlinks, devices, etc.)
-        return fmt.Errorf("copyFile: non-regular source file %s (%q)", sfi.Name(), sfi.Mode().String())
-    }
-
-    // Check second file
-    dfi, err := os.Stat(dst)
-    if err != nil {
-        if !os.IsNotExist(err) {
-            return err
-        }
-    } else {
-        if !(dfi.Mode().IsRegular()) {
-            return fmt.Errorf("copyFile: non-regular destination file %s (%q)", dfi.Name(), dfi.Mode().String())
-        }
-        if os.SameFile(sfi, dfi) {
-            return nil
-        }
-    }
-
-    // Open source file
-    in, err := os.Open(src)
-    if err != nil {
-        return err
-    }
-    defer in.Close()
-
-    // Create destination file
-    out, err := os.Create(dst)
-    if err != nil {
-        return err
-    }
-    defer func() {
-        cerr := out.Close()
-        if err == nil {
-            err = cerr
-        }
-    }()
-
-    // Copy
-    if _, err = io.Copy(out, in); err != nil {
-        return err
-    }
-
-    // Sync
-    return out.Sync()
-}
-
-// First argument is the final destination path, the rest are files to combine
-func copyPlus(dst string, srcs ...string) error {
-    temp := filepath.Join(*tmp, "bob.plus")
-    together, err := os.OpenFile(temp, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
-    if err != nil {
-        return err
-    }
-    defer together.Close()
-
-    for _, src := range srcs {
-        f, err := os.Open(src)
-        if err != nil {
-            return err
-        }
-
-        if _, err = io.Copy(together, f); err != nil {
-            return err
-        }
-
-        f.Close()
-    }
-
-    if err := together.Close(); err != nil {
-        return err
-    }
-
-    return copyFile(temp, dst)
-}
-
 // Copy NW.js files
 func copyWalk(path string, info os.FileInfo, err error) error {
     if err != nil { return err }
@@ -234,7 +151,11 @@ func copyWalk(path string, info os.FileInfo, err error) error {
         }
     }
 
-    return copyFile(path, dstPath)
+    if _, err = kopsa.Copy(dstPath, path); err != nil {
+        return err
+    }
+
+    return nil
 }
 
 func createZip() {
@@ -259,7 +180,7 @@ func createExe() {
         fatalError(err.Error())
     }
 
-    if err := copyFile(filepath.Join(*nwDir, "nw.exe"), exePath); err != nil {
+    if _, err := kopsa.Copy(exePath, filepath.Join(*nwDir, "nw.exe")); err != nil {
         fatalError(err.Error())
     }
 
@@ -267,7 +188,7 @@ func createExe() {
         yellow.Println(err.Error())
     }
 
-    if err := copyPlus(exePath, exePath, filepath.Join(*tmp, "bob.nw")); err != nil {
+    if _, err := kopsa.Copy(exePath, exePath, filepath.Join(*tmp, "bob.nw")); err != nil {
         fatalError("Can't copy app.nw+nw.exe: " + err.Error())
     }
 }
@@ -295,7 +216,7 @@ func createIcon() error {
 }
 
 func cleanUp() {
-    temps := []string{"bobunzip", "bob.nw", "bob.plus"}
+    temps := []string{"bobunzip", "bob.nw"}
     for _, temp := range temps {
         if err := os.RemoveAll(filepath.Join(*tmp, temp)); err != nil {
             yellow.Println(err.Error())
